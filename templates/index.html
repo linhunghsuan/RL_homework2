@@ -103,22 +103,33 @@
                     toggleCellSelection(false);
                 });
         }
-
+        
         function runValueIteration() {
             fetch("/value_iteration", { method: "POST" })
                 .then(response => response.json())
                 .then(data => {
                     let values = data.values;
                     let policy = data.policy;
+                    let optimalPath = new Set(data.optimal_path.map(pos => `${pos[0]},${pos[1]}`));
+
                     document.querySelectorAll(".grid-cell").forEach(cell => {
-                        let x = cell.dataset.x;
-                        let y = cell.dataset.y;
-                        cell.innerText = policy[x][y] + "\n" + values[x][y].toFixed(2);
+                        let x = parseInt(cell.dataset.x);
+                        let y = parseInt(cell.dataset.y);
+                        let key = `${x},${y}`;
+
+                        if (policy[key]) {
+                            cell.innerText = policy[key] + "\n" + values[x][y].toFixed(2);
+                        }
+                        if (optimalPath.has(key)) {
+                            cell.style.backgroundColor = "yellow";  // 標記最佳路徑
+                        }
                     });
+
                     document.getElementById("btn-value-iteration").disabled = true;
                     document.getElementById("btn-reset").disabled = false;
                     valueIterationDone = true;
-                });
+                })
+                .catch(error => console.error("Error:", error));
         }
 
         function resetGrid() {

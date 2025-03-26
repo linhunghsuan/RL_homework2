@@ -66,11 +66,12 @@ def value_iteration():
     gamma = 0.9  # 折扣因子
     theta = 1e-4  # 迭代停止閥值
     V = np.zeros((grid_size, grid_size))
-    
+    optimal_path = set()  # 存放最佳路徑
+
     while True:
         delta = 0
         new_V = np.copy(V)
-        
+
         for i in range(grid_size):
             for j in range(grid_size):
                 if (i, j) in goal_pos:
@@ -79,7 +80,7 @@ def value_iteration():
                 if (i, j) in dead_pos:
                     new_V[i, j] = -1
                     continue
-                
+
                 max_value = float('-inf')
                 best_action = None
                 for action, (nx, ny) in get_valid_actions(i, j).items():
@@ -88,21 +89,34 @@ def value_iteration():
                         reward = 1
                     elif (nx, ny) in dead_pos:
                         reward = -1
-                    
+
                     value = reward + gamma * V[nx, ny]
                     if value > max_value:
                         max_value = value
                         best_action = action
-                
+
                 new_V[i, j] = max_value
                 policy[f"{i},{j}"] = best_action
                 delta = max(delta, abs(V[i, j] - new_V[i, j]))
-        
+
         V = new_V
         if delta < theta:
             break
-    
-    return jsonify({'policy': policy, 'values': V.tolist()})
+
+    # **透過回溯找出最佳路徑**
+    current = start_pos
+    while current and current not in goal_pos:
+        optimal_path.add(current)
+        action = policy.get(f"{current[0]},{current[1]}")
+        if action is None:
+            break
+        dx, dy = actions[action]
+        current = (current[0] + dx, current[1] + dy)
+
+    return jsonify({'policy': policy, 'values': V.tolist(), 'optimal_path': list(optimal_path)})
+
+
+
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)
