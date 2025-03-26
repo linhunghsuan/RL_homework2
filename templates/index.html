@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridWorld - Value Iteration</title>
+    <script>
+        let gridSize = 5;
+        let policy = {};
+        let startSet = false;
+        let goalSet = false;
+        let policyGenerated = false;
+        let valueIterationDone = false;
+        let gridSizeSet = false;
+
+        function setGridSize() {
+            if (policyGenerated) {
+                alert("You cannot change the grid size after generating the policy.");
+                return;
+            }
+            gridSize = document.getElementById("grid-size").value;
+            fetch("/set_grid", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ size: gridSize })
+            }).then(() => {
+                createGrid();
+                policyGenerated = false;
+                valueIterationDone = false;
+                gridSizeSet = true;
+                toggleCellSelection(true);
+                document.getElementById("btn-reset").disabled = false;
+                document.getElementById("btn-policy").disabled = true;
+                document.getElementById("btn-value-iteration").disabled = true;
+            });
+        }
+
+        function createGrid() {
+            const container = document.getElementById("grid-container");
+            container.innerHTML = "";
+            container.style.gridTemplateColumns = `repeat(${gridSize}, 40px)`;
+
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    let cell = document.createElement("div");
+                    cell.className = "grid-cell";
+                    cell.dataset.x = i;
+                    cell.dataset.y = j;
+                    cell.onclick = () => selectCell(i, j);
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function selectCell(x, y) {
+            if (policyGenerated || valueIterationDone) return;
+
+            let cellType = document.querySelector('input[name="cell-type"]:checked').value;
+            fetch("/set_cell", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ x, y, type: cellType })
+            }).then(() => {
+                let cell = document.querySelector(`[data-x='${x}'][data-y='${y}']`);
+                if (cellType === "start") {
+                    document.querySelectorAll(".grid-cell").forEach(c => c.classList.remove("start"));
+                    cell.classList.add("start");
+                    startSet = true;
+                } else if (cellType === "goal") {
+                    cell.classList.add("goal");
+                    goalSet = true;
+                } else if (cellType === "dead") {
+                    cell.classList.add("dead");
+                }
+                checkEnablePolicyButton();
+            });
+        }
+
+        function checkEnablePolicyButton() {
+            document.getElementById("btn-policy").disabled = !(startSet && goalSet);
+        }
+
+        function getPolicy() {
+            if (!startSet || !goalSet) {
+                alert("Please set both start and goal points before getting the policy.");
+                return;
+            }
+
+            document.getElementById("btn-policy").disabled = true;
+            document.getElementById("btn-value-iteration").disabled = false;
+            document.getElementById("btn-reset").disabled = false;
+
+            fetch("/get_policy")
+                .then(response => response.json())
+                .then(data => {
+                    policy = data.policy;
+                    for (const [key, value] of Object.entries(policy)) {
+                        let [x, y] = key.split(",").map(Number);
+                        let cell = document.querySelector(`[data-x='${x}'][data-y='${y}']`);
+                        cell.innerText = value;
+                    }
+                    policyGenerated = true;
+                    toggleCellSelection(false);
+                });
+        }
+
+        function runValueIteration() {
+            fetch("/value_iteration", { method: "POST" })
+                .then(response => response.json())
+                .then(data => {
+                    let values = data.values;
+                    let policy = data.policy;
+                    document.querySelectorAll(".grid-cell").forEach(cell => {
+                        let x = cell.dataset.x;
+                        let y = cell.dataset.y;
+                        cell.innerText = policy[x][y] + "\n" + values[x][y].toFixed(2);
+                    });
+                    document.getElementById("btn-value-iteration").disabled = true;
+                    document.getElementById("btn-reset").disabled = false;
+                    valueIterationDone = true;
+                });
+        }
+
+        function resetGrid() {
+            startSet = false;
+            goalSet = false;
+            policyGenerated = false;
+            valueIterationDone = false;
+            gridSizeSet = false;
+            document.getElementById("btn-policy").disabled = true;
+            document.getElementById("btn-value-iteration").disabled = true;
+            document.getElementById("btn-reset").disabled = true;
+            createGrid();
+            toggleCellSelection(true);
+        }
+
+        function toggleCellSelection(enabled) {
+            document.querySelectorAll('input[name="cell-type"]').forEach(input => {
+                input.disabled = !enabled;
+            });
+        }
+    </script>
+    <style>
+        .grid {
+            display: grid;
+            gap: 2px;
+            margin-top: 10px;
+        }
+        .grid-cell {
+            width: 40px;
+            height: 40px;
+            background-color: lightgray;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid black;
+        }
+        .start { background-color: green !important; }
+        .goal { background-color: red !important; }
+        .dead { background-color: blue !important; }
+    </style>
+</head>
+<body>
+    <h2>GridWorld - Value Iteration</h2>
+    <h3>HW2-1</h3>
+    <label>Grid Size:</label>
+    <input type="number" id="grid-size" value="5" min="3" max="20">
+    <button onclick="setGridSize()" id="btn-set-grid">Set Size</button>
+
+    <div>
+        <label><input type="radio" name="cell-type" value="start" checked> Start (Green)</label>
+        <label><input type="radio" name="cell-type" value="goal"> Goal (Red)</label>
+        <label><input type="radio" name="cell-type" value="dead"> Dead (Blue)</label>
+    </div>
+
+    <h3>HW2-2</h3>
+    <button id="btn-policy" onclick="getPolicy()" disabled>Get Policy</button>
+    <button id="btn-value-iteration" onclick="runValueIteration()" disabled>Value Iteration</button>
+    
+    <h3>Reset</h3>
+    <button id="btn-reset" onclick="resetGrid()" disabled>Reset</button>
+
+    <div id="grid-container" class="grid"></div>
+</body>
+</html>
